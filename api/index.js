@@ -38,9 +38,9 @@ app.post("/send-email", async (req, res) => {
 
     const mailOptions = {
       from: `"Ramesh Annabhimoju" <${process.env.SMTP_USER}>`, // sender address
-      to, // list of receivers
+      to: email, // list of receivers
       subject, // Subject line
-      text, // plain text body
+      text: body, // plain text body
     };
 
     await transporter.sendMail(mailOptions);
