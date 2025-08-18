@@ -1,4 +1,4 @@
-import express from "express";
+import express, { raw } from "express";
 import dotenv from "dotenv";
 import cors from "cors";
 import { Client } from "@microsoft/microsoft-graph-client";
@@ -37,7 +37,7 @@ app.get("/email-api", (req, res) => {
   res.send("Hello World!");
 });
 
-app.post("/send-email", async (req, res) => {
+app.post("/send-text-email", async (req, res) => {
   const { email, subject, body } = req.body;
   if (!email || !subject || !body) {
     return res.status(400).json({ error: "Missing required fields" });
@@ -62,6 +62,66 @@ app.post("/send-email", async (req, res) => {
       saveToSentItems: "true",
     });
 
+    res.status(200).json({ message: "Email sent successfully!" });
+  } catch (error) {
+    console.error("Error sending email:", error);
+    res.status(500).json({ error: "Failed to send email" });
+  }
+});
+
+app.post("/send-email", async (req, res) => {
+  const { toName, toEmail, subject, textBody, htmlBody } = req.body;
+  if (!toName || !toEmail || !subject || !textBody || !htmlBody) {
+
+    return res.status(400).json({
+      error: `Missing required fields  
+      ${!toName && " To Name,"} ${!toEmail && " To Email,"} 
+      ${!subject && " Subject,"} ${!textBody && " Text Body,"} 
+      ${!htmlBody && " HTML Body,"}`
+    });
+  }
+
+  const mimeMessage = `
+    MIME-Version: 1.0
+    Content-Type: multipart/alternative; boundary="boundary123"
+    Subject: ${subject}
+    From: TesseractApps <${process.env.SENDER_EMAIL}>
+    To: ${toName} <${toEmail}>
+
+    --boundary123
+    Content-Type: text/plain; charset=utf-8
+
+    ${textBody}
+
+    --boundary123
+    Content-Type: text/html; charset=utf-8
+
+    <!DOCTYPE html>
+    <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>TesseractApps</title>
+      </head>
+      <body style="font-family: Roboto, sans-serif;">
+        ${htmlBody}
+      </body>
+    </html>
+
+    --boundary123--
+  `;
+
+  const encodedMessage = Buffer.from(mimeMessage)
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+
+  try {
+    await graphClient.api(`/users/${process.env.SENDER_EMAIL}/sendMail`).post({
+      message: { raw: encodedMessage },
+      saveToSentItems: "true",
+    });
     res.status(200).json({ message: "Email sent successfully!" });
   } catch (error) {
     console.error("Error sending email:", error);
