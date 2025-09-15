@@ -11,7 +11,7 @@ const PORT = process.env.PORT || 3000;
 app.use(
   cors({
     origin: "*",
-    credentials: true,
+    // credentials: true,
   })
 );
 app.use(express.json());
@@ -27,7 +27,9 @@ const credential = new ClientSecretCredential(
 const graphClient = Client.initWithMiddleware({
   authProvider: {
     getAccessToken: async () => {
-      const token = await credential.getToken("https://graph.microsoft.com/.default");
+      const token = await credential.getToken(
+        "https://graph.microsoft.com/.default"
+      );
       return token.token;
     },
   },
@@ -72,56 +74,76 @@ app.post("/send-text-email", async (req, res) => {
 app.post("/send-email", async (req, res) => {
   const { toName, toEmail, subject, textBody, htmlBody } = req.body;
   if (!toName || !toEmail || !subject || !textBody || !htmlBody) {
-
     return res.status(400).json({
       error: `Missing required fields  
       ${!toName && " To Name,"} ${!toEmail && " To Email,"} 
       ${!subject && " Subject,"} ${!textBody && " Text Body,"} 
-      ${!htmlBody && " HTML Body,"}`
+      ${!htmlBody && " HTML Body,"}`,
     });
   }
+  // const mimeMessage = `
+  //   MIME-Version: 1.0
+  //   Content-Type: multipart/alternative; boundary="boundary123"
+  //   Subject: ${subject}
+  //   From: TesseractApps <${process.env.SENDER_EMAIL}>
+  //   To: ${toName} <${toEmail}>
 
-  const mimeMessage = `
-    MIME-Version: 1.0
-    Content-Type: multipart/alternative; boundary="boundary123"
-    Subject: ${subject}
-    From: TesseractApps <${process.env.SENDER_EMAIL}>
-    To: ${toName} <${toEmail}>
+  //   --boundary123
+  //   Content-Type: text/plain; charset=utf-8
 
-    --boundary123
-    Content-Type: text/plain; charset=utf-8
+  //   ${textBody}
 
-    ${textBody}
+  //   --boundary123
+  //   Content-Type: text/html; charset=utf-8
 
-    --boundary123
-    Content-Type: text/html; charset=utf-8
+  //   <!DOCTYPE html>
+  //   <html lang="en">
+  //     <head>
+  //       <meta charset="UTF-8">
+  //       <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  //       <title>TesseractApps</title>
+  //     </head>
+  //     <body style="font-family: Roboto, sans-serif;">
+  //       ${htmlBody}
+  //     </body>
+  //   </html>
 
-    <!DOCTYPE html>
-    <html lang="en">
-      <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>TesseractApps</title>
-      </head>
-      <body style="font-family: Roboto, sans-serif;">
-        ${htmlBody}
-      </body>
-    </html>
+  //   --boundary123--
+  // `;
 
-    --boundary123--
-  `;
-
-  const encodedMessage = Buffer.from(mimeMessage)
-    .toString("base64")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
+  // const encodedMessage = Buffer.from(mimeMessage)
+  //   .toString("base64")
+  //   .replace(/\+/g, "-")
+  //   .replace(/\//g, "_")
+  //   .replace(/=+$/, "");
+  const mail = {
+    message: {
+      subject: subject,
+      body: {
+        contentType: "HTML", // "Text" or "HTML"
+        content: htmlBody, // use your htmlBody directly
+      },
+      toRecipients: [
+        {
+          emailAddress: {
+            address: toEmail,
+            name: toName,
+          },
+        },
+      ],
+      from: {
+        emailAddress: {
+          address: process.env.SENDER_EMAIL,
+        },
+      },
+    },
+    saveToSentItems: true,
+  };
 
   try {
-    await graphClient.api(`/users/${process.env.SENDER_EMAIL}/sendMail`).post({
-      message: { raw: encodedMessage },
-      saveToSentItems: "true",
-    });
+    await graphClient
+      .api(`/users/${process.env.SENDER_EMAIL}/sendMail`)
+      .post(mail);
     res.status(200).json({ message: "Email sent successfully!" });
   } catch (error) {
     console.error("Error sending email:", error);
